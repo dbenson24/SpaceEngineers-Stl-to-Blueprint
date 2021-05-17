@@ -46,20 +46,58 @@ const LEFT: Vector3<f32> = Vector3::new(-1.0, 0.0, 0.0);
 const UP: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
 const DOWN: Vector3<f32> = Vector3::new(0.0, -1.0, 0.0);
 
-const POINTS: [ Vector3<f32> ; 8] = [
-    Vector3::new(-1.0,  1.0, -1.0),
-    Vector3::new( 1.0,  1.0, -1.0),
-    Vector3::new(-1.0,  1.0,  1.0),
-    Vector3::new( 1.0,  1.0,  1.0),
+const POINTS: [ Vector3<f32> ; 20] = [
+    Vector3::new(-1.0, 1.0, -1.0),
+    Vector3::new(0.0, 1.0, -1.0),
+    Vector3::new(1.0, 1.0, -1.0),
+    Vector3::new(-1.0, 1.0, 0.0),
+    Vector3::new(1.0, 1.0, 0.0),
+    Vector3::new(-1.0, 1.0, 1.0),
+    Vector3::new(0.0, 1.0, 1.0),
+    Vector3::new(1.0, 1.0, 1.0),
+    Vector3::new(-1.0, 0.0, -1.0),
+    Vector3::new(1.0, 0.0, -1.0),
+    Vector3::new(-1.0, 0.0, 1.0),
+    Vector3::new(1.0, 0.0, 1.0),
     Vector3::new(-1.0, -1.0, -1.0),
-    Vector3::new( 1.0, -1.0, -1.0),
-    Vector3::new(-1.0, -1.0,  1.0),
-    Vector3::new( 1.0, -1.0,  1.0),
+    Vector3::new(0.0, -1.0, -1.0),
+    Vector3::new(1.0, -1.0, -1.0),
+    Vector3::new(-1.0, -1.0, 0.0),
+    Vector3::new(1.0, -1.0, 0.0),
+    Vector3::new(-1.0, -1.0, 1.0),
+    Vector3::new(0.0, -1.0, 1.0),
+    Vector3::new(1.0, -1.0, 1.0),
 ];
 
 fn main() {
 
+    let all_blocks: [CubeBlock ; 23] = [
+        CubeBlock::new([true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true], "LargeBlockArmorBlock"),
+        CubeBlock::new([true,true,true,false,false,false,false,false,true,true,false,false,true,true,true,true,true,true,true,true], "LargeBlockArmorSlope"),
+        CubeBlock::new([false,false,true,false,false,false,false,false,false,true,false,false,true,true,true,false,true,false,false,true], "LargeBlockArmorCorner"),
+        CubeBlock::new([true,true,true,true,true,true,true,true,true,false,true,true,true,false,false,true,false,true,true,true], "LargeBlockArmorCornerInv"),
+        CubeBlock::new([true,false,false,false,false,false,false,false,true,false,false,false,true,true,true,true,true,true,true,true], "LargeBlockArmorCornerSquare"),
+        CubeBlock::new([true,true,true,true,false,true,false,false,true,true,true,false,true,true,true,true,true,true,true,true], "LargeBlockArmorCornerSquareInverted"),
+        CubeBlock::new([true,true,true,false,false,false,false,false,true,true,true,true,true,true,true,true,true,true,true,true], "LargeBlockArmorSlope2Base"),
+        CubeBlock::new([false,false,false,false,false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true], "LargeBlockArmorSlope2Tip"),
+        CubeBlock::new([true,true,true,false,false,false,false,false,true,true,false,false,true,true,true,false,false,false,false,false], "LargeHalfArmorBlock"),
+        CubeBlock::new([false,false,false,false,false,false,false,false,true,true,false,false,true,true,true,true,true,false,false,false], "LargeHalfSlopeArmorBlock"),
+        CubeBlock::new([false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true], "LargeBlockArmorHalfSlopeCorner"),
+        CubeBlock::new([false,false,false,false,false,false,false,false,false,false,false,false,true,true,true,true,false,true,false,false], "LargeBlockArmorHalfCorner"),
+        CubeBlock::new([true,false,false,false,false,false,false,false,true,true,true,false,true,true,true,true,false,true,false,false], "LargeBlockArmorHalfSlopedCorner"),
+        CubeBlock::new([true,false,false,false,false,false,false,false,true,true,false,false,true,true,true,true,true,true,false,false], "LargeBlockArmorCorner2Base"),
+        CubeBlock::new([false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,false,true,false,false,true], "LargeBlockArmorCorner2Tip"),
+        CubeBlock::new([true,true,true,true,true,true,true,true,true,true,true,true,true,true,false,true,false,true,true,true], "LargeBlockArmorInvCorner2Base"),
+        CubeBlock::new([true,true,true,true,true,true,true,true,true,false,true,true,true,false,false,true,false,true,true,false], "LargeBlockArmorInvCorner2Tip"),
+        CubeBlock::new([false,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true], "LargeBlockArmorHalfSlopeCornerInverted"),
+        CubeBlock::new([true,true,false,true,false,true,true,false,true,true,true,true,true,true,true,true,true,true,true,true], "LargeBlockArmorHalfSlopeInverted"),
+        CubeBlock::new([false,false,false,false,false,false,false,false,false,false,false,false,true,false,false,true,false,true,true,true], "LargeBlockArmorSlopedCornerTip"),
+        CubeBlock::new([true,true,true,false,true,false,false,true,true,true,true,true,true,true,true,true,true,true,true,true], "LargeBlockArmorSlopedCornerBase"),
+        CubeBlock::new([true,false,false,false,false,false,false,false,true,true,true,false,true,true,true,true,true,true,true,true], "LargeBlockArmorSlopedCorner"),
+        CubeBlock::new([false,false,false,false,false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true], "LargeBlockArmorHalfSlopedCornerBase"),
+    ];
 
+    /*
     let HalfSlope: CubeBlock = CubeBlock::new([true, true, false, false, true, true, true, true], "LargeBlockArmorSlope");
 
     let FullBlock: CubeBlock = CubeBlock::new([true, true, true, true, true, true, true, true], "LargeHeavyBlockArmorBlock");
@@ -69,10 +107,10 @@ fn main() {
     let InvCorner: CubeBlock = CubeBlock::new([true, true, true, true, true, false, true, true], "LargeBlockArmorCornerInv");
     
     let SquareCorner: CubeBlock = CubeBlock::new([true, false, false, false, true, true, true, true], "LargeBlockArmorCornerSquare");
+    */
 
 
-
-    let blocksize = 101;
+    let blocksize = 205;
 
     let mut file = OpenOptions::new().read(true).open("falcon.stl").unwrap();
     let mut stl = stl_io::create_stl_reader(&mut file).unwrap();
@@ -143,50 +181,29 @@ fn main() {
                 }
                 let mut hits = Vec::new();
                 for pt in POINTS.iter() {
-                    let contains = check_block_space(&(point + (pt * halfDist)), &mesh, 1.0 * dist);
+                    let contains = check_block_space(&(point + (pt * halfDist)), &mesh, 0.95 * dist);
                     if contains {
                         hits.push(pt)
                     }
                 }
                 let block = CubeBlock::get_block(&hits);
 
-                match block {
-                    Some(block) => {
-                        //inside = inside + 1;
-                        let cube = match block {
-                            Blocks::HalfSlope => &HalfSlope,
-                            Blocks::CornerBlock => &CornerBlock,
-                            Blocks::InvCorner => &InvCorner,
-                            Blocks::SquareCorner => &SquareCorner,
-                            Blocks::FullBlock => &FullBlock,
-                        };
-                        if block == Blocks::FullBlock {
+                for block in all_blocks.iter() {
+                    let oris = block.get_orientation(&hits);
+                    match oris {
+                        Some((fwd, up)) => {
                             let block_def = format!("            <MyObjectBuilder_CubeBlock xsi:type=\"MyObjectBuilder_CubeBlock\">
                             <SubtypeName>{}</SubtypeName>
                             <Min x=\"{}\" y=\"{}\" z=\"{}\" />
+                            <BlockOrientation Forward=\"{}\" Up=\"{}\" />
                             <BuiltBy>144115188075855895</BuiltBy>
-                        </MyObjectBuilder_CubeBlock>", cube.Subtype, x, y, z);
+                        </MyObjectBuilder_CubeBlock>", block.Subtype, x, y, z, fwd, up);
                             blocks.push(block_def);
-                        } else {
-                            let oris = cube.get_orientation(&hits);
-                            match oris {
-                                Some((fwd, up)) => {
-                                    let block_def = format!("            <MyObjectBuilder_CubeBlock xsi:type=\"MyObjectBuilder_CubeBlock\">
-                                    <SubtypeName>{}</SubtypeName>
-                                    <Min x=\"{}\" y=\"{}\" z=\"{}\" />
-                                    <BlockOrientation Forward=\"{}\" Up=\"{}\" />
-                                    <BuiltBy>144115188075855895</BuiltBy>
-                                </MyObjectBuilder_CubeBlock>", cube.Subtype, x, y, z, fwd, up);
-                                    blocks.push(block_def);
-                                }
-                                _ => {
-
-                                }
-                            }
+                            break;
                         }
-                    },
-                    None => {
-                        //outside = outside + 1;
+                        _ => {
+
+                        }
                     }
                 }
             }
@@ -206,7 +223,7 @@ fn main() {
     let mut blockFile = File::create("blocks.txt").unwrap();
     blockFile.write_fmt(format_args!("          <CubeBlocks>\n{}\n          </CubeBlocks>", blocks.join("\n")));
 
-    println!("inside={} outside={} blocks={}", inside, outside, blocks.len());
+    println!("blocks={}", blocks.len());
     let ray = Ray::new(Point3::new(-50.0, 0.0, 0.0), RIGHT);
 
     let intersects_ray = mesh.intersects_ray(&Isometry3::identity(), &ray, 5000.0);
@@ -449,14 +466,14 @@ enum Blocks {
 }
 
 struct CubeBlock<'a> {
-    pub Points: [bool; 8],
+    pub Points: [bool; 20],
     pub Subtype: &'a str,
     pub Orientations: Vec<(Direction, Direction, Vec<Point3<f32>>)>
 }
 
 impl<'a> CubeBlock<'a> {
 
-    pub fn new(points: [bool; 8], subtype: &'a str) -> CubeBlock {
+    pub fn new(points: [bool; 20], subtype: &'a str) -> CubeBlock {
         let mut orientations = Vec::new();
         let mut orig_pts = Vec::new();
         let lookup = Direction::get_matrix_arr();
@@ -507,6 +524,9 @@ impl<'a> CubeBlock<'a> {
 
     pub fn get_orientation(&self, points: &Vec<&Vector3<f32>>) -> Option<(Direction, Direction)> {
         for (fwd, up, oriented_points) in self.Orientations.iter() {
+            if points.len() != oriented_points.len() {
+                return None;
+            }
             for i in 0 .. points.len() {
                 let vec = points[i];
                 let p = Point3::new(vec.x, vec.y, vec.z);
