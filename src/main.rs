@@ -79,22 +79,22 @@ fn main() {
         CubeBlock::new([true,false,false,false,false,false,false,false,true,false,false,false,true,true,true,true,true,true,true,true], "LargeBlockArmorCornerSquare"),
         CubeBlock::new([true,true,true,true,false,true,false,false,true,true,true,false,true,true,true,true,true,true,true,true], "LargeBlockArmorCornerSquareInverted"),
         CubeBlock::new([true,true,true,false,false,false,false,false,true,true,true,true,true,true,true,true,true,true,true,true], "LargeBlockArmorSlope2Base"),
-        CubeBlock::new([false,false,false,false,false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true], "LargeBlockArmorSlope2Tip"),
-        CubeBlock::new([true,true,true,false,false,false,false,false,true,true,false,false,true,true,true,false,false,false,false,false], "LargeHalfArmorBlock"),
+        CubeBlock::new([false,false,false,false,false,false,false,false,true,true,false,false,true,true,true,true,true,true,true,true], "LargeBlockArmorSlope2Tip"),
+        CubeBlock::new([true,true,true,true,true,false,false,false,true,true,false,false,true,true,true,true,true,false,false,false], "LargeHalfArmorBlock"),
         CubeBlock::new([false,false,false,false,false,false,false,false,true,true,false,false,true,true,true,true,true,false,false,false], "LargeHalfSlopeArmorBlock"),
-        CubeBlock::new([false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true], "LargeBlockArmorHalfSlopeCorner"),
-        CubeBlock::new([false,false,false,false,false,false,false,false,false,false,false,false,true,true,true,true,false,true,false,false], "LargeBlockArmorHalfCorner"),
+        CubeBlock::new([false,false,false,false,false,false,false,false,false,false,false,true,false,false,false,false,true,false,true,true], "LargeBlockArmorHalfSlopeCorner"),
+        CubeBlock::new([false,false,false,false,false,false,false,false,true,true,true,false,true,true,true,true,false,true,false,false], "LargeBlockArmorHalfCorner"),
         CubeBlock::new([true,false,false,false,false,false,false,false,true,true,true,false,true,true,true,true,false,true,false,false], "LargeBlockArmorHalfSlopedCorner"),
         CubeBlock::new([true,false,false,false,false,false,false,false,true,true,false,false,true,true,true,true,true,true,false,false], "LargeBlockArmorCorner2Base"),
-        CubeBlock::new([false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,false,true,false,false,true], "LargeBlockArmorCorner2Tip"),
+        CubeBlock::new([false,false,false,false,false,false,false,false,false,true,false,false,false,true,true,false,true,false,false,false], "LargeBlockArmorCorner2Tip"),
         CubeBlock::new([true,true,true,true,true,true,true,true,true,true,true,true,true,true,false,true,false,true,true,true], "LargeBlockArmorInvCorner2Base"),
         CubeBlock::new([true,true,true,true,true,true,true,true,true,false,true,true,true,false,false,true,false,true,true,false], "LargeBlockArmorInvCorner2Tip"),
         CubeBlock::new([false,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true], "LargeBlockArmorHalfSlopeCornerInverted"),
         CubeBlock::new([true,true,false,true,false,true,true,false,true,true,true,true,true,true,true,true,true,true,true,true], "LargeBlockArmorHalfSlopeInverted"),
-        CubeBlock::new([false,false,false,false,false,false,false,false,false,false,false,false,true,false,false,true,false,true,true,true], "LargeBlockArmorSlopedCornerTip"),
+        CubeBlock::new([false,false,false,false,false,false,false,false,false,false,true,false,false,false,false,true,false,true,true,false], "LargeBlockArmorSlopedCornerTip"),
         CubeBlock::new([true,true,true,false,true,false,false,true,true,true,true,true,true,true,true,true,true,true,true,true], "LargeBlockArmorSlopedCornerBase"),
         CubeBlock::new([true,false,false,false,false,false,false,false,true,true,true,false,true,true,true,true,true,true,true,true], "LargeBlockArmorSlopedCorner"),
-        CubeBlock::new([false,false,false,false,false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true], "LargeBlockArmorHalfSlopedCornerBase"),
+        CubeBlock::new([false,false,false,false,false,false,false,false,true,true,true,false,true,true,true,true,true,true,true,true], "LargeBlockArmorHalfSlopedCornerBase"),
     ];
 
     /*
@@ -110,7 +110,7 @@ fn main() {
     */
 
 
-    let blocksize = 205;
+    let blocksize = 63;
 
     let mut file = OpenOptions::new().read(true).open("falcon.stl").unwrap();
     let mut stl = stl_io::create_stl_reader(&mut file).unwrap();
@@ -181,7 +181,7 @@ fn main() {
                 }
                 let mut hits = Vec::new();
                 for pt in POINTS.iter() {
-                    let contains = check_block_space(&(point + (pt * halfDist)), &mesh, 0.95 * dist);
+                    let contains = check_block_space(&(point + (pt * halfDist)), &mesh, 1.33 * dist);
                     if contains {
                         hits.push(pt)
                     }
