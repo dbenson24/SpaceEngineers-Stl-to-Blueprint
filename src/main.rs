@@ -170,8 +170,10 @@ fn main() {
     
 
 
-    let all_blocks: Vec<Vec<String>> = (0.. blocksize).into_par_iter().map(|x|  {
+    let block_results: Vec<(Vec<OrientedBlock>, Vec<Point3<usize>>)> = (0.. blocksize).into_par_iter().map(|x|  {
         let mut blocks = Vec::new();
+        let mut partials = Vec::new();
+
         for y in 0 .. blocksize {
             for z in 0 .. blocksize {
                 let point = Point3::new(x as f32 * dist, y as f32 * dist, z as f32 * dist) + aabb.mins.coords;
@@ -187,18 +189,21 @@ fn main() {
                     }
                 }
                 let block = CubeBlock::get_block(&hits);
+                let mut matched = false;
 
                 for block in all_blocks.iter() {
                     let oris = block.get_orientation(&hits);
                     match oris {
-                        Some((fwd, up)) => {
+                        Some((fwd, up, points)) => {
                             let block_def = format!("            <MyObjectBuilder_CubeBlock xsi:type=\"MyObjectBuilder_CubeBlock\">
                             <SubtypeName>{}</SubtypeName>
                             <Min x=\"{}\" y=\"{}\" z=\"{}\" />
                             <BlockOrientation Forward=\"{}\" Up=\"{}\" />
                             <BuiltBy>144115188075855895</BuiltBy>
                         </MyObjectBuilder_CubeBlock>", block.Subtype, x, y, z, fwd, up);
-                            blocks.push(block_def);
+
+                            blocks.push(OrientedBlock::new(Point3::new(x,y,z), points, block_def));
+                            matched = true;
                             break;
                         }
                         _ => {
@@ -206,22 +211,78 @@ fn main() {
                         }
                     }
                 }
+                if hits.len() > 0 && !matched {
+                    partials.push(Point3::new(x, y, z));
+                }
             }
         }
-        return blocks;
+        return (blocks, partials);
     }).collect();
 
     let mut blocks = Vec::new();
 
-    for b in all_blocks {
-        for x in b {
-            blocks.push(x);
+    let mut grid: Vec<Vec<Vec<Option<OrientedBlock>>>> = vec![vec![vec![None ; blocksize as usize]; blocksize as usize]; blocksize as usize];
+
+    let mut partials  = Vec::new();
+
+    for (bs, ps) in block_results.iter() {
+        for x in bs.iter() {
+            grid[x.Pos.x][x.Pos.y][x.Pos.z] = Some(x.clone());
+            blocks.push(x.clone());
+        }
+        for p in ps {
+            partials.push(*p);
         }
     }
     
+    let mut changed = 1;
+    while changed > 0 {
+        println!("Starting fill pass");
+        changed = 0;
+        let mut newPartials = Vec::new();
+        for p in partials {
+            let hits = fill_from_nearby_cubes(&p, &grid);
+            
+            let block = CubeBlock::get_block(&hits);
+            let mut matched = false;
+
+            for block in all_blocks.iter() {
+                let oris = block.get_orientation(&hits);
+                match oris {
+                    Some((fwd, up, points)) => {
+                        let block_def = format!("            <MyObjectBuilder_CubeBlock xsi:type=\"MyObjectBuilder_CubeBlock\">
+                        <SubtypeName>{}</SubtypeName>
+                        <Min x=\"{}\" y=\"{}\" z=\"{}\" />
+                        <BlockOrientation Forward=\"{}\" Up=\"{}\" />
+                        <BuiltBy>144115188075855895</BuiltBy>
+                    </MyObjectBuilder_CubeBlock>", block.Subtype, p.x, p.y, p.z, fwd, up);
+
+                        let b = OrientedBlock::new(Point3::new(p.x,p.y,p.z), points, block_def);
+                        grid[p.x][p.y][p.z] = Some(b.clone());
+                        blocks.push(b);
+                        matched = true;
+                        changed = changed + 1;
+                        break;
+                    }
+                    _ => {
+
+                    }
+                }
+            }
+            if !matched {
+                newPartials.push(Point3::new(p.x, p.y, p.z));
+            }
+        }
+        partials = newPartials;
+    }
+    
+    let mut defs = Vec::new();
+    for b in blocks.iter() {
+        defs.push(b.Xml.to_string());
+    }
 
     let mut blockFile = File::create("blocks.txt").unwrap();
-    blockFile.write_fmt(format_args!("          <CubeBlocks>\n{}\n          </CubeBlocks>", blocks.join("\n")));
+    blockFile.write_fmt(format_args!("          <CubeBlocks>\n{}\n          </CubeBlocks>", defs.join("\n")));
 
     println!("blocks={}", blocks.len());
     let ray = Ray::new(Point3::new(-50.0, 0.0, 0.0), RIGHT);
@@ -241,36 +302,45 @@ fn check_block_space(point: &Point3<f32>, mesh: &TriMesh, dist: f32) -> bool
 
     let d = mesh.distance_to_local_point(point, true);
     return d < dist;
-    /*
+}
 
-    let mut results = Vec::new();
+fn fill_from_nearby_cubes<'a>(pos: &Point3<usize>, grid: &Vec<Vec<Vec<Option<OrientedBlock>>>>) -> Vec<&'a Vector3<f32>>
+{
+    let f_pos = Point3::new(pos.x as f32, pos.y as f32, pos.z as f32);
+    let mut hits = Vec::new();
+    for x in -1 .. 2 {
+        if (pos.x as i32) + x >= 0 && (pos.x as i32) + x < grid.len() as i32{
+            let col = &grid[(pos.x as i32 + x) as usize];
+            for y in -1 .. 2 {
+                if (pos.y as i32) + y >= 0 && (pos.y as i32) + y < col.len() as i32 {
+                    let row = &col[(pos.y as i32 + y) as usize];
+                    for z in -1 .. 2 {
+                        if (pos.z as i32) + z >= 0 && (pos.z as i32) + z < row.len() as i32 {
+                            match &row[(pos.z as i32 + z) as usize] {
+                                Some(nbor) => {
+                                    for neigh_vert in nbor.Verts {
+                                        let w_pos = neigh_vert + Vector3::new(nbor.Pos.x as f32, nbor.Pos.y as f32, nbor.Pos.z as f32);
+                                        for pt in POINTS.iter() {
+                                            let pt_w_pos = f_pos + pt;
+                                            if relative_eq!(w_pos, pt_w_pos, epsilon=0.001) {
+                                                let hit = hits.iter().find(|&x| relative_eq!(*x, pt));
+                                                if hit.is_none() {
+                                                    hits.push(pt);
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                None => {  }
+                            }
 
-    let ray = Ray::new(*point, UP);
-    results.push(mesh.cast_local_ray_and_get_normal(&ray, dist, true));
-    let ray = Ray::new(*point, DOWN);
-    results.push(mesh.cast_local_ray_and_get_normal(&ray, dist, true));
-    let ray = Ray::new(*point, RIGHT);
-    results.push(mesh.cast_local_ray_and_get_normal(&ray, dist, true));
-    let ray = Ray::new(*point, LEFT);
-    results.push(mesh.cast_local_ray_and_get_normal(&ray, dist, true));
-    let ray = Ray::new(*point, FORWARD);
-    results.push(mesh.cast_local_ray_and_get_normal(&ray, dist, true));
-    let ray = Ray::new(*point, BACKWARD);
-    results.push(mesh.cast_local_ray_and_get_normal(&ray, dist, true));
-
-    for res in results {
-        match res {
-            Some(x) => {
-                return true;
-            },
-            None => {
+                        }
+                    }
+                }
             }
         }
-    };
-
-    return false;
-    */
-
+    }
+    return hits;
 }
 
 
@@ -289,7 +359,7 @@ fn getMinDistance(minDist: &mut FloatOrd<f32>, point: Point3<f32>, vertices: &Ve
     }
 }
 
-fn get_vert_index(point: &Point3<f32>, verts: &Vec<na::Point<f32, 3_usize>>) -> i32 {
+fn get_vert_index(point: &Point3<f32>, verts: &Vec<na::Point3<f32>>) -> i32 {
     let mut currIndex = -1;
     for j in 0..verts.len() {
         let newVert = verts[j];
@@ -302,7 +372,7 @@ fn get_vert_index(point: &Point3<f32>, verts: &Vec<na::Point<f32, 3_usize>>) -> 
     return currIndex;
 }
 
-fn get_corrected_vert_index(index: usize, verts: &Vec<na::Point<f32, 3_usize>>, triangles: &stl_io::IndexedMesh) -> u32
+fn get_corrected_vert_index(index: usize, verts: &Vec<na::Point3<f32>>, triangles: &stl_io::IndexedMesh) -> u32
 {
     return index as u32;
 
@@ -465,11 +535,31 @@ enum Blocks {
     SquareCorner
 }
 
+#[derive(Debug, Clone)]
+struct OrientedBlock<'a> {
+    pub Pos: Point3<usize>,
+    pub Verts: &'a Vec<Point3<f32>>,
+    pub Xml: String
+}
+
+impl<'a>  OrientedBlock<'a> {
+    pub fn new(pos: Point3<usize>, verts: &'a Vec<Point3<f32>>, xml: String) -> OrientedBlock<'a> {
+        return OrientedBlock {
+            Pos: pos,
+            Verts: verts,
+            Xml: xml
+        }
+    }
+}
+
+
+
 struct CubeBlock<'a> {
     pub Points: [bool; 20],
     pub Subtype: &'a str,
     pub Orientations: Vec<(Direction, Direction, Vec<Point3<f32>>)>
 }
+
 
 impl<'a> CubeBlock<'a> {
 
@@ -522,7 +612,7 @@ impl<'a> CubeBlock<'a> {
         
     }
 
-    pub fn get_orientation(&self, points: &Vec<&Vector3<f32>>) -> Option<(Direction, Direction)> {
+    pub fn get_orientation(&self, points: &Vec<&Vector3<f32>>) -> Option<(Direction, Direction, &Vec<Point3<f32>>)> {
         for (fwd, up, oriented_points) in self.Orientations.iter() {
             if points.len() != oriented_points.len() {
                 return None;
@@ -530,10 +620,10 @@ impl<'a> CubeBlock<'a> {
             for i in 0 .. points.len() {
                 let vec = points[i];
                 let p = Point3::new(vec.x, vec.y, vec.z);
-                let x = oriented_points.iter().find(|&x| relative_eq!(x, &p));
+                let x = oriented_points.iter().find(|&x| relative_eq!(*x, p));
                 if x.is_some() {
                     if (i == points.len() - 1) {
-                        return Some((*fwd, *up));
+                        return Some((*fwd, *up, oriented_points));
                     }
                 } else {
                     break;
