@@ -72,7 +72,7 @@ fn main() {
 
     // Data to be used in the app (=state)
     let data: AppState = AppState {
-        input_file: format!("falcon.stl"),
+        input_file: format!("model.stl"),
         output_file: format!("bp.sbc"),
         block_size: format!("{}", 70),
         large_grid: true,
@@ -262,17 +262,21 @@ fn convert_file_to_blueprint(blocksize: usize, mesh_path: String, large_grid: bo
     });
 
 
-    let (mut grid, mut blocks) = mesh_to_blocks(blocksize, large_grid, &mesh, &all_blocks);
+    let mut grid = mesh_to_blocks(blocksize, large_grid, &mesh, &all_blocks);
 
     let mut changed = 1;
-    while changed > 0 {
-        println!("beginning fill pass");
-        changed = smooth_block_grid(blocksize, large_grid, &all_blocks, &mut grid, &mut blocks);
-        println!("completed fill pass with {} added blocks", changed);
-    }
+    //while changed > 0 {
+    //}
+    
+    println!("beginning fill pass");
+    changed = smooth_block_grid(blocksize, large_grid, &all_blocks, &mut grid, false);
+    println!("completed fill pass with {} added blocks", changed);
+    
+    println!("beginning fill pass");
+    changed = smooth_block_grid(blocksize, large_grid, &all_blocks, &mut grid, true);
+    println!("completed fill pass with {} added blocks", changed);
 
-    println!("generated BP with block count of {}", blocks.len());
-    output_blocks_to_file(output_file.as_str(), &blocks, large_grid);
+    output_blocks_to_file(output_file.as_str(), &grid, large_grid);
 }
 
 
@@ -306,11 +310,18 @@ fn parse_stl_to_mesh(path: &str) -> TriMesh {
     return TriMesh::new(verts, tris);
 }
 
-fn output_blocks_to_file(path: &str, blocks: &Vec<OrientedBlock>, large_grid: bool) {
+fn output_blocks_to_file(path: &str, grid: &Vec<Vec<Vec<Option<OrientedBlock>>>>, large_grid: bool) {
     let mut defs = Vec::new();
 
-    for b in blocks.iter() {
-        defs.push(b.Xml.to_string());
+    for row in grid.iter() {
+        for col in row.iter() {
+            for block in col.iter() {
+                match block {
+                    Some(b) => defs.push(b.Xml.to_string()),
+                    None => {}
+                }
+            }
+        }
     }
 
     let mut block_file = File::create(path).unwrap();
@@ -366,10 +377,7 @@ fn mesh_to_blocks<'a>(
     large_grid: bool,
     mesh: &TriMesh,
     avail_blocks: &'a Vec<CubeBlock<'a>>,
-) -> (
-    Vec<Vec<Vec<Option<OrientedBlock<'a>>>>>,
-    Vec<OrientedBlock<'a>>,
-) {
+) -> Vec<Vec<Vec<Option<OrientedBlock<'a>>>>> {
     let aabb = mesh.local_aabb();
 
     println!("aabb min {}", aabb.mins);
@@ -432,6 +440,7 @@ fn mesh_to_blocks<'a>(
                                     Point3::new(x, y, z),
                                     points,
                                     block_def,
+                                    false
                                 ));
                                 break;
                             }
@@ -444,7 +453,6 @@ fn mesh_to_blocks<'a>(
         })
         .collect();
 
-    let mut blocks = Vec::new();
 
     let mut grid: Vec<Vec<Vec<Option<OrientedBlock>>>> =
         vec![vec![vec![None; blocksize as usize]; blocksize as usize]; blocksize as usize];
@@ -452,11 +460,10 @@ fn mesh_to_blocks<'a>(
     for bs in block_results.iter() {
         for x in bs.iter() {
             grid[x.Pos.x][x.Pos.y][x.Pos.z] = Some(x.clone());
-            blocks.push(x.clone());
         }
     }
 
-    return (grid, blocks);
+    return grid;
 }
 
 fn smooth_block_grid<'a>(
@@ -464,10 +471,11 @@ fn smooth_block_grid<'a>(
     large_grid: bool,
     avail_blocks: &'a Vec<CubeBlock<'a>>,
     grid: &mut Vec<Vec<Vec<Option<OrientedBlock<'a>>>>>,
-    blocks: &mut Vec<OrientedBlock<'a>>,
+    replace_existing: bool
 ) -> usize {
     let mut changed = 0;
     for block in avail_blocks.iter() {
+        println!("{}", block.LGSubtype);
         let hit_count = block.Points.iter().filter(|&x| *x).count();
         let result: Vec<Vec<OrientedBlock>> = (0..blocksize)
             .into_par_iter()
@@ -477,8 +485,10 @@ fn smooth_block_grid<'a>(
                     for z in 0..blocksize {
                         let p = Point3::new(x, y, z);
                         match &grid[x][y][z] {
-                            Some(_x) => {
-                                continue;
+                            Some(b) => {
+                                if !replace_existing || b.Optim {
+                                    continue;
+                                }
                             }
                             _ => {}
                         }
@@ -489,6 +499,7 @@ fn smooth_block_grid<'a>(
                         }
 
                         let oris = block.get_orientation(&hits);
+                        let mut found = false;
                         match oris {
                             Some((fwd, up, points)) => {
                                 let block_def = format_block_def(
@@ -508,9 +519,10 @@ fn smooth_block_grid<'a>(
                                     Point3::new(p.x, p.y, p.z),
                                     points,
                                     block_def,
+                                    true
                                 );
                                 blocks.push(b);
-                                break;
+                                continue;
                             }
                             _ => {}
                         }
@@ -535,6 +547,7 @@ fn smooth_block_grid<'a>(
                                         Point3::new(p.x, p.y, p.z),
                                         points,
                                         block_def,
+                                        true
                                     );
                                     blocks.push(b);
                                     break;
@@ -550,7 +563,6 @@ fn smooth_block_grid<'a>(
         for res in result {
             for block in res {
                 grid[block.Pos.x][block.Pos.y][block.Pos.z] = Some(block.clone());
-                blocks.push(block);
                 changed = changed + 1;
             }
         }
@@ -603,6 +615,9 @@ fn fill_from_nearby_cubes<'a>(
                         if (pos.z as i32) + z >= 0 && (pos.z as i32) + z < row.len() as i32 {
                             match &row[(pos.z as i32 + z) as usize] {
                                 Some(nbor) => {
+                                    if pos == &nbor.Pos {
+                                        continue;
+                                    }
                                     for neigh_vert in nbor.Verts {
                                         let w_pos = (neigh_vert / 2.0)
                                             + Vector3::new(
@@ -796,14 +811,16 @@ struct OrientedBlock<'a> {
     pub Pos: Point3<usize>,
     pub Verts: &'a Vec<Point3<f32>>,
     pub Xml: String,
+    pub Optim: bool,
 }
 
 impl<'a> OrientedBlock<'a> {
-    pub fn new(pos: Point3<usize>, verts: &'a Vec<Point3<f32>>, xml: String) -> OrientedBlock<'a> {
+    pub fn new(pos: Point3<usize>, verts: &'a Vec<Point3<f32>>, xml: String, optim: bool) -> OrientedBlock<'a> {
         return OrientedBlock {
             Pos: pos,
             Verts: verts,
             Xml: xml,
+            Optim: optim
         };
     }
 }
@@ -828,7 +845,7 @@ impl<'a> CubeBlock<'a> {
             let pt = points[i];
             if pt {
                 let vec = POINTS[i];
-                orig_pts.push(Point3::from_coordinates(vec));
+                orig_pts.push(Point3::from(vec));
             }
         }
 
