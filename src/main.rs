@@ -18,7 +18,7 @@ use parry3d::shape::TriMesh;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-use druid::widget::{Button, Flex, Label, TextBox};
+use druid::widget::{Button, Flex, Label, TextBox, Slider};
 use druid::{AppLauncher, commands, AppDelegate, Data, LocalizedString, PlatformError, Lens, Widget, WidgetExt, WindowDesc, Env, Target, Command, FontDescriptor, FontFamily, UnitPoint, DelegateCtx, FileDialogOptions, FileSpec,
     Handled,};
 
@@ -59,6 +59,7 @@ struct AppState {
     output_file: String,
     block_size: String,
     large_grid: bool,
+    mesh_fit: f64,
 }
 
 struct Delegate;
@@ -76,6 +77,7 @@ fn main() {
         output_file: format!("bp.sbc"),
         block_size: format!("{}", 70),
         large_grid: true,
+        mesh_fit: 0.95
     };
 
     // Run the app
@@ -158,7 +160,7 @@ fn ui_builder() -> impl Widget<AppState> {
         .with_child(textbox2)
         .padding(5.0);
 
-    let label3 = Label::new(|data: &AppState, _env: &Env| format!("Largest Side in Blocks:")).padding(5.0);
+    let label3 = Label::new(|data: &AppState, _env: &Env| format!("Length of largest side in blocks:")).padding(5.0);
 
     let textbox3 = TextBox::new()
         .with_placeholder("block count")
@@ -173,8 +175,16 @@ fn ui_builder() -> impl Widget<AppState> {
         .with_child(textbox3)
         .padding(5.0);
 
+    let label4 = Label::new(|data: &AppState, _env: &Env| format!("How close to fit blocks to imported mesh (default 0.95): {:.2}", data.mesh_fit)).padding(5.0);
+    let fit_slider = Slider::with_range(Slider::new(), 0.33, 3.0).lens(AppState::mesh_fit).fix_width(275.0);
     
-    let label4 = Label::new(|data: &AppState, _env: &Env| format!("Using {} grid", if data.large_grid {"Large"} else {"Small"})).padding(5.0);
+    let row4 = Flex::row()
+        .with_child(label4)
+        .with_spacer(5.0)
+        .with_child(fit_slider)
+        .padding(5.0); 
+
+    let label5 = Label::new(|data: &AppState, _env: &Env| format!("Using {} grid", if data.large_grid {"Large"} else {"Small"})).padding(5.0);
     
     let button_grid_size = Button::new("Swap Grid Size")
         .on_click(|_ctx, data: &mut AppState, _env| (*data).large_grid = !data.large_grid);
@@ -186,21 +196,21 @@ fn ui_builder() -> impl Widget<AppState> {
         */
 
 
-    let row4 = Flex::row()
-        .with_child(label4)
+    let row5 = Flex::row()
+        .with_child(label5)
         .with_spacer(5.0)
         .with_child(button_grid_size)
         .padding(5.0);
 
     let generate_button = Button::new("Generate!")
         .on_click(|_ctx, data: &mut AppState, _env| {
-            convert_file_to_blueprint(data.block_size.parse::<usize>().unwrap(), data.input_file.clone(), data.large_grid, data.output_file.clone());
+            convert_file_to_blueprint(data.block_size.parse::<usize>().unwrap(), data.input_file.clone(), data.large_grid, data.output_file.clone(), data.mesh_fit);
         })
         .padding(5.0);
 
-    let row5 = Flex::row().with_child(generate_button);
+    let row6 = Flex::row().with_child(generate_button);
 
-    Flex::column().with_child(row1).with_child(row2).with_child(row3).with_child(row4).with_child(row5)
+    Flex::column().with_child(row1).with_child(row2).with_child(row3).with_child(row4).with_child(row5).with_child(row6)
 }
 
 impl AppDelegate<AppState> for Delegate {
@@ -223,7 +233,7 @@ impl AppDelegate<AppState> for Delegate {
     }
 }
 
-fn convert_file_to_blueprint(blocksize: usize, mesh_path: String, large_grid: bool, output_file: String) {
+fn convert_file_to_blueprint(blocksize: usize, mesh_path: String, large_grid: bool, output_file: String, mesh_fit: f64) {
     
     let mesh = parse_stl_to_mesh(mesh_path.as_str());
 
@@ -251,6 +261,7 @@ fn convert_file_to_blueprint(blocksize: usize, mesh_path: String, large_grid: bo
         CubeBlock::new([true,true,true,false,true,false,false,true,true,true,true,true,true,true,true,true,true,true,true,true], "LargeBlockArmorSlopedCornerBase", "SmallBlockArmorSlopedCornerBase"),
         CubeBlock::new([true,false,false,false,false,false,false,false,true,true,true,false,true,true,true,true,true,true,true,true], "LargeBlockArmorSlopedCorner", "SmallBlockArmorSlopedCorner"),
         CubeBlock::new([false,false,false,false,false,false,false,false,true,true,true,false,true,true,true,true,true,true,true,true], "LargeBlockArmorHalfSlopedCornerBase", "SmallBlockArmorHalfSlopedCornerBase"),
+        CubeBlock::new([false,false,false,false,false,true,false,false,true,true,true,true,true,true,true,true,true,true,true,true], "AQD_LG_LA_Slab_RaisedCorner_Inset", "AQD_SG_LA_Slab_RaisedCorner_Inset"),
     ];
 
     all_blocks.sort_by(|a, b| {
@@ -262,7 +273,7 @@ fn convert_file_to_blueprint(blocksize: usize, mesh_path: String, large_grid: bo
     });
 
 
-    let mut grid = mesh_to_blocks(blocksize, large_grid, &mesh, &all_blocks);
+    let mut grid = mesh_to_blocks(blocksize, large_grid, &mesh, &all_blocks, mesh_fit);
 
     let mut changed = 1;
     //while changed > 0 {
@@ -323,6 +334,7 @@ fn output_blocks_to_file(path: &str, grid: &Vec<Vec<Vec<Option<OrientedBlock>>>>
             }
         }
     }
+    println!("Generated BP has {} blocks", defs.len());
 
     let mut block_file = File::create(path).unwrap();
     let _res = block_file.write_fmt(format_args!("<?xml version=\"1.0\"?>
@@ -370,6 +382,7 @@ fn output_blocks_to_file(path: &str, grid: &Vec<Vec<Vec<Option<OrientedBlock>>>>
         name="Generated Test",
         size=if large_grid {"Large"} else {"Small"}
     ));
+    println!("Done!");
 }
 
 fn mesh_to_blocks<'a>(
@@ -377,6 +390,7 @@ fn mesh_to_blocks<'a>(
     large_grid: bool,
     mesh: &TriMesh,
     avail_blocks: &'a Vec<CubeBlock<'a>>,
+    mesh_fit: f64
 ) -> Vec<Vec<Vec<Option<OrientedBlock<'a>>>>> {
     let aabb = mesh.local_aabb();
 
@@ -413,7 +427,7 @@ fn mesh_to_blocks<'a>(
                     let mut hits = Vec::new();
                     for pt in POINTS.iter() {
                         let contains =
-                            check_block_space(&(point + (pt * half_dist)), &mesh, 0.95 * dist);
+                            check_block_space(&(point + (pt * half_dist)), &mesh, mesh_fit as f32 * dist);
                         if contains {
                             hits.push(pt)
                         }
