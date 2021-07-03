@@ -13,7 +13,7 @@ extern crate approx;
 use std::fs::File;
 use std::io::prelude::*;
 
-use parry3d::query::PointQuery;
+use parry3d::query::{PointQuery, RayCast, Ray};
 use parry3d::shape::TriMesh;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -23,34 +23,22 @@ use druid::{AppLauncher, commands, AppDelegate, Data, LocalizedString, PlatformE
     Handled,};
 
 
-const FORWARD: Vector3<f32> = Vector3::new(0.0, 0.0, -1.0);
-const BACKWARD: Vector3<f32> = Vector3::new(0.0, 0.0, 1.0);
+const FORWARD: Vector3<f32> = Vector3::new(0.0, 0.0, 1.0);
+const BACKWARD: Vector3<f32> = Vector3::new(0.0, 0.0, -1.0);
 const RIGHT: Vector3<f32> = Vector3::new(1.0, 0.0, 0.0);
 const LEFT: Vector3<f32> = Vector3::new(-1.0, 0.0, 0.0);
 const UP: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
 const DOWN: Vector3<f32> = Vector3::new(0.0, -1.0, 0.0);
 
-const POINTS: [Vector3<f32>; 20] = [
-    Vector3::new(-1.0, 1.0, -1.0),
-    Vector3::new(0.0, 1.0, -1.0),
-    Vector3::new(1.0, 1.0, -1.0),
-    Vector3::new(-1.0, 1.0, 0.0),
-    Vector3::new(1.0, 1.0, 0.0),
-    Vector3::new(-1.0, 1.0, 1.0),
-    Vector3::new(0.0, 1.0, 1.0),
-    Vector3::new(1.0, 1.0, 1.0),
-    Vector3::new(-1.0, 0.0, -1.0),
-    Vector3::new(1.0, 0.0, -1.0),
-    Vector3::new(-1.0, 0.0, 1.0),
-    Vector3::new(1.0, 0.0, 1.0),
+const POINTS_8: [ Vector3<f32> ; 8] = [
+    Vector3::new(-1.0,  1.0, -1.0),
+    Vector3::new( 1.0,  1.0, -1.0),
+    Vector3::new(-1.0,  1.0,  1.0),
+    Vector3::new( 1.0,  1.0,  1.0),
     Vector3::new(-1.0, -1.0, -1.0),
-    Vector3::new(0.0, -1.0, -1.0),
-    Vector3::new(1.0, -1.0, -1.0),
-    Vector3::new(-1.0, -1.0, 0.0),
-    Vector3::new(1.0, -1.0, 0.0),
-    Vector3::new(-1.0, -1.0, 1.0),
-    Vector3::new(0.0, -1.0, 1.0),
-    Vector3::new(1.0, -1.0, 1.0),
+    Vector3::new( 1.0, -1.0, -1.0),
+    Vector3::new(-1.0, -1.0,  1.0),
+    Vector3::new( 1.0, -1.0,  1.0),
 ];
 
 #[derive(Clone, Data, Lens)]
@@ -65,8 +53,7 @@ struct AppState {
 struct Delegate;
 
 fn main() {
-
-
+    
     let main_window = WindowDesc::new(ui_builder)
         .title("STL to Blueprint")
         .window_size((800.0, 800.0));
@@ -74,7 +61,7 @@ fn main() {
     // Data to be used in the app (=state)
     let data: AppState = AppState {
         input_file: format!("model.stl"),
-        output_file: format!("bp.sbc"),
+        output_file: format!("blocks.json"),
         block_size: format!("{}", 70),
         large_grid: true,
         mesh_fit: 0.95
@@ -237,32 +224,36 @@ fn convert_file_to_blueprint(blocksize: usize, mesh_path: String, large_grid: bo
     
     let mesh = parse_stl_to_mesh(mesh_path.as_str());
 
-    let mut all_blocks = vec![
-        CubeBlock::new([true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true], "LargeBlockArmorBlock", "SmallBlockArmorBlock"),
-        CubeBlock::new([true,true,true,false,false,false,false,false,true,true,false,false,true,true,true,true,true,true,true,true], "LargeBlockArmorSlope", "SmallBlockArmorSlope"),
-        CubeBlock::new([false,false,true,false,false,false,false,false,false,true,false,false,true,true,true,false,true,false,false,true], "LargeBlockArmorCorner", "SmallBlockArmorCorner"),
-        CubeBlock::new([true,true,true,true,true,true,true,true,true,false,true,true,true,false,false,true,false,true,true,true], "LargeBlockArmorCornerInv", "SmallBlockArmorCornerInv"),
-        CubeBlock::new([true,false,false,false,false,false,false,false,true,false,false,false,true,true,true,true,true,true,true,true], "LargeBlockArmorCornerSquare", "SmallBlockArmorCornerSquare"),
-        CubeBlock::new([true,true,true,true,false,true,false,false,true,true,true,false,true,true,true,true,true,true,true,true], "LargeBlockArmorCornerSquareInverted", "SmallBlockArmorCornerSquareInverted"),
-        CubeBlock::new([true,true,true,false,false,false,false,false,true,true,true,true,true,true,true,true,true,true,true,true], "LargeBlockArmorSlope2Base", "SmallBlockArmorSlope2Base"),
-        CubeBlock::new([false,false,false,false,false,false,false,false,true,true,false,false,true,true,true,true,true,true,true,true], "LargeBlockArmorSlope2Tip", "SmallBlockArmorSlope2Tip"),
-        CubeBlock::new([true,true,true,true,true,false,false,false,true,true,false,false,true,true,true,true,true,false,false,false], "LargeHalfArmorBlock", "HalfArmorBlock"),
-        CubeBlock::new([false,false,false,false,false,false,false,false,true,true,false,false,true,true,true,true,true,false,false,false], "LargeHalfSlopeArmorBlock", "HalfSlopeArmorBlock"),
-        CubeBlock::new([false,false,false,false,false,false,false,false,false,false,false,true,false,false,false,false,true,false,true,true], "LargeBlockArmorHalfSlopeCorner", "SmallBlockArmorHalfSlopeCorner"),
-        CubeBlock::new([false,false,false,false,false,false,false,false,true,true,true,false,true,true,true,true,false,true,false,false], "LargeBlockArmorHalfCorner", "SmallBlockArmorHalfCorner"),
-        CubeBlock::new([true,false,false,false,false,false,false,false,true,true,true,false,true,true,true,true,false,true,false,false], "LargeBlockArmorHalfSlopedCorner", "SmallBlockArmorHalfSlopedCorner"),
-        CubeBlock::new([true,false,false,false,false,false,false,false,true,true,false,false,true,true,true,true,true,true,false,false], "LargeBlockArmorCorner2Base", "SmallBlockArmorCorner2Base"),
-        CubeBlock::new([false,false,false,false,false,false,false,false,false,true,false,false,false,true,true,false,true,false,false,true], "LargeBlockArmorCorner2Tip", "SmallBlockArmorCorner2Tip"),
-        CubeBlock::new([true,true,true,true,true,true,true,true,true,true,true,true,true,true,false,true,false,true,true,true], "LargeBlockArmorInvCorner2Base", "SmallBlockArmorInvCorner2Base"),
-        CubeBlock::new([true,true,true,true,true,true,true,true,true,false,true,true,true,false,false,true,false,true,true,false], "LargeBlockArmorInvCorner2Tip", "SmallBlockArmorInvCorner2Tip"),
-        CubeBlock::new([false,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true], "LargeBlockArmorHalfSlopeCornerInverted", "SmallBlockArmorHalfSlopeCornerInverted"),
-        CubeBlock::new([true,true,false,true,false,true,true,false,true,true,true,true,true,true,true,true,true,true,true,true], "LargeBlockArmorHalfSlopeInverted", "SmallBlockArmorHalfSlopeInverted"),
-        CubeBlock::new([false,false,false,false,false,false,false,false,false,false,true,false,true,false,false,true,false,true,true,true], "LargeBlockArmorSlopedCornerTip", "SmallBlockArmorSlopedCornerTip"),
-        CubeBlock::new([true,true,true,false,true,false,false,true,true,true,true,true,true,true,true,true,true,true,true,true], "LargeBlockArmorSlopedCornerBase", "SmallBlockArmorSlopedCornerBase"),
-        CubeBlock::new([true,false,false,false,false,false,false,false,true,true,true,false,true,true,true,true,true,true,true,true], "LargeBlockArmorSlopedCorner", "SmallBlockArmorSlopedCorner"),
-        CubeBlock::new([false,false,false,false,false,false,false,false,true,true,true,false,true,true,true,true,true,true,true,true], "LargeBlockArmorHalfSlopedCornerBase", "SmallBlockArmorHalfSlopedCornerBase"),
-        CubeBlock::new([false,false,false,false,false,true,false,false,true,true,true,true,true,true,true,true,true,true,true,true], "AQD_LG_LA_Slab_RaisedCorner_Inset", "AQD_SG_LA_Slab_RaisedCorner_Inset"),
-    ];
+
+    let block_paths: std::vec::Vec<&str> = vec!(
+        "shapesFull.stl",
+        "shapesInvCorner.stl",
+        "shapesRamp.stl",
+        "shapesSquareCorner.stl",
+        "shapesCorner.stl",
+        "shapesInvSquareCorner.stl");
+
+    let mut all_blocks = vec!(
+        CubeBlock::new([true, true, true, true, true, true, true, true], 0),
+        CubeBlock::new([true, true, false, true, true, true, true, true], 1),
+        CubeBlock::new([true, true, false, false, true, true, true, true], 2),
+        CubeBlock::new([true, true, false, false, true, true, true, false], 3),
+        CubeBlock::new([true, false, false, false, true, true, true, false], 4),
+        //CubeBlock::new([true, true, false, true, true, true, true, true], 5)
+    );
+    /*
+    let mut shape = 0;
+    for path in block_paths {
+
+        let mesh = parse_stl_to_mesh(path);
+        let points = generate_contact_points(&mesh);
+
+        all_blocks.push(CubeBlock::new(points, shape));
+        shape += 1;
+
+        println!("{} = {:?}", path, points);
+    }
+    */
 
     all_blocks.sort_by(|a, b| {
         b.Points
@@ -321,6 +312,60 @@ fn parse_stl_to_mesh(path: &str) -> TriMesh {
     return TriMesh::new(verts, tris);
 }
 
+fn check_point(point: Point3<f32>, mesh: &TriMesh, dir: Vector3<f32>) -> bool {
+    let point = point * 0.5;
+    let mut hit = false;
+    for x in -3..4 {
+        for y in -3..4 {
+            for z in -3..4 {
+                let offset = Vector3::new(x as f32, y as f32, z as f32) * 0.0333;
+                let ray = Ray::new(point + offset, dir);
+                match mesh.cast_local_ray(&ray, 0.1, false) {
+                    Some(_) => hit = true,
+                    None => (),
+                }
+            }
+        }
+    }
+    return hit;
+}
+
+fn generate_contact_points(mesh: &TriMesh) -> [bool; 8]
+{
+    let mut hits = [false; 8];
+
+    for i in 0..8 {
+        let pt = POINTS_8[i];
+        let mut hit = false;
+        if pt.z < -0.9
+        {
+            hit = hit || check_point(Point3::from(pt), mesh, FORWARD)
+        }
+        if pt.z > 0.9
+        {
+            hit = hit || check_point(Point3::from(pt), mesh, BACKWARD)
+        }
+        if pt.x < -0.9
+        {
+            hit = hit || check_point(Point3::from(pt), mesh, RIGHT)
+        }
+        if pt.x > 0.9
+        {
+            hit = hit || check_point(Point3::from(pt), mesh, LEFT)
+        }
+        if pt.y < -0.9
+        {
+            hit = hit || check_point(Point3::from(pt), mesh, DOWN)
+        }
+        if pt.y > 0.9
+        {
+            hit = hit || check_point(Point3::from(pt), mesh, UP)
+        }
+        hits[i] = hit;
+    }
+    return hits;
+}
+
 fn output_blocks_to_file(path: &str, grid: &Vec<Vec<Vec<Option<OrientedBlock>>>>, large_grid: bool) {
     let mut defs = Vec::new();
 
@@ -337,50 +382,10 @@ fn output_blocks_to_file(path: &str, grid: &Vec<Vec<Vec<Option<OrientedBlock>>>>
     println!("Generated BP has {} blocks", defs.len());
 
     let mut block_file = File::create(path).unwrap();
-    let _res = block_file.write_fmt(format_args!("<?xml version=\"1.0\"?>
-    <Definitions xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">
-      <ShipBlueprints>
-        <ShipBlueprint xsi:type=\"MyObjectBuilder_ShipBlueprintDefinition\">
-          <Id Type=\"MyObjectBuilder_ShipBlueprintDefinition\" Subtype=\"{name}\" />
-          <DisplayName>{name}</DisplayName>
-          <CubeGrids>
-            <CubeGrid>
-              <SubtypeName />
-              <EntityId>134254513543793982</EntityId>
-              <PersistentFlags>CastShadows InScene</PersistentFlags>
-              <PositionAndOrientation>
-                <Position x=\"0\" y=\"0\" z=\"0\" />
-                <Forward x=\"0.0245060846\" y=\"-0.3717277\" z=\"-0.928018332\" />
-                <Up x=\"0.669880331\" y=\"0.69516927\" z=\"-0.260768056\" />
-                <Orientation>
-                  <X>-0.172392666</X>
-                  <Y>-0.07919351</Y>
-                  <Z>-0.350280046</Z>
-                  <W>0.9172312</W>
-                </Orientation>
-              </PositionAndOrientation>
-              <LocalPositionAndOrientation xsi:nil=\"true\" />
-              <GridSizeEnum>{size}</GridSizeEnum>
-              <CubeBlocks>\n{}\n
-              </CubeBlocks>
-    
-              <DisplayName>{name}</DisplayName>
-              <DestructibleBlocks>true</DestructibleBlocks>
-              <IsRespawnGrid>false</IsRespawnGrid>
-              <LocalCoordSys>0</LocalCoordSys>
-              <TargetingTargets />
-            </CubeGrid>
-          </CubeGrids>
-          <EnvironmentType>None</EnvironmentType>
-          <WorkshopId>0</WorkshopId>
-          <OwnerSteamId>76561198116813162</OwnerSteamId>
-          <Points>0</Points>
-        </ShipBlueprint>
-      </ShipBlueprints>
-    </Definitions>",
-        defs.join("\n"),
-        name="Generated Test",
-        size=if large_grid {"Large"} else {"Small"}
+    let _res = block_file.write_fmt(format_args!("{{ \"Blocks\": [
+        {}
+        ] }}",
+        defs.join(",\n")
     ));
     println!("Done!");
 }
@@ -389,7 +394,7 @@ fn mesh_to_blocks<'a>(
     blocksize: usize,
     large_grid: bool,
     mesh: &TriMesh,
-    avail_blocks: &'a Vec<CubeBlock<'a>>,
+    avail_blocks: &'a Vec<CubeBlock>,
     mesh_fit: f64
 ) -> Vec<Vec<Vec<Option<OrientedBlock<'a>>>>> {
     let aabb = mesh.local_aabb();
@@ -425,7 +430,7 @@ fn mesh_to_blocks<'a>(
                         continue;
                     }
                     let mut hits = Vec::new();
-                    for pt in POINTS.iter() {
+                    for pt in POINTS_8.iter() {
                         let contains =
                             check_block_space(&(point + (pt * half_dist)), &mesh, mesh_fit as f32 * dist);
                         if contains {
@@ -438,11 +443,7 @@ fn mesh_to_blocks<'a>(
                         match oris {
                             Some((fwd, up, points)) => {
                                 let block_def = format_block_def(
-                                    if large_grid {
-                                        block.LGSubtype
-                                    } else {
-                                        block.SGSubtype
-                                    },
+                                    block.Shape,
                                     x,
                                     y,
                                     z,
@@ -483,13 +484,12 @@ fn mesh_to_blocks<'a>(
 fn smooth_block_grid<'a>(
     blocksize: usize,
     large_grid: bool,
-    avail_blocks: &'a Vec<CubeBlock<'a>>,
+    avail_blocks: &'a Vec<CubeBlock>,
     grid: &mut Vec<Vec<Vec<Option<OrientedBlock<'a>>>>>,
     replace_existing: bool
 ) -> usize {
     let mut changed = 0;
     for block in avail_blocks.iter() {
-        println!("{}", block.LGSubtype);
         let hit_count = block.Points.iter().filter(|&x| *x).count();
         let result: Vec<Vec<OrientedBlock>> = (0..blocksize)
             .into_par_iter()
@@ -517,11 +517,7 @@ fn smooth_block_grid<'a>(
                         match oris {
                             Some((fwd, up, points)) => {
                                 let block_def = format_block_def(
-                                    if large_grid {
-                                        block.LGSubtype
-                                    } else {
-                                        block.SGSubtype
-                                    },
+                                    block.Shape,
                                     p.x,
                                     p.y,
                                     p.z,
@@ -545,11 +541,7 @@ fn smooth_block_grid<'a>(
                             match oris {
                                 Some((fwd, up, points)) => {
                                     let block_def = format_block_def(
-                                        if large_grid {
-                                            block.LGSubtype
-                                        } else {
-                                            block.SGSubtype
-                                        },
+                                        block.Shape,
                                         p.x,
                                         p.y,
                                         p.z,
@@ -585,7 +577,7 @@ fn smooth_block_grid<'a>(
 }
 
 fn format_block_def(
-    subtype: &str,
+    shape: u32,
     x: usize,
     y: usize,
     z: usize,
@@ -593,13 +585,16 @@ fn format_block_def(
     up: Direction,
 ) -> String {
     return format!(
-        "            <MyObjectBuilder_CubeBlock xsi:type=\"MyObjectBuilder_CubeBlock\">
-                <SubtypeName>{}</SubtypeName>
-                <Min x=\"{}\" y=\"{}\" z=\"{}\" />
-                <BlockOrientation Forward=\"{}\" Up=\"{}\" />
-                <BuiltBy>0</BuiltBy>
-            </MyObjectBuilder_CubeBlock>",
-        subtype, x, y, z, fwd, up
+        "{{
+\"Forward\":{},
+\"Up\":{},
+\"Shape\": {},
+\"Scale\": {{\"x\": 0,\"y\": 0,\"z\": 0
+}},
+\"Pos\": {{\"x\": {},\"y\": {},\"z\": {}}},
+\"Color\": 4278255615 
+}}",
+         fwd.get_u32(), up.get_u32(), shape, x, y, z
     );
 }
 
@@ -639,7 +634,7 @@ fn fill_from_nearby_cubes<'a>(
                                                 nbor.Pos.y as f32,
                                                 nbor.Pos.z as f32,
                                             );
-                                        for pt in POINTS.iter() {
+                                        for pt in POINTS_8.iter() {
                                             let pt_w_pos = f_pos + (pt / 2.0);
                                             if relative_eq!(w_pos, pt_w_pos) {
                                                 let hit =
@@ -750,6 +745,17 @@ impl Direction {
         };
     }
 
+    fn get_u32(&self) -> u32 {
+        return match self {
+            Direction::FORWARD => 0,
+            Direction::BACKWARD => 1,
+            Direction::UP => 2,
+            Direction::DOWN => 3,
+            Direction::LEFT => 4,
+            Direction::RIGHT => 5,
+        };
+    }
+
     fn from_vec(dir: &Vector3<f32>) -> Direction {
         //println!("{:?}", dir);
         if relative_eq!(dir, &FORWARD) {
@@ -772,6 +778,7 @@ impl Direction {
         };
         panic!("Not a valid direction")
     }
+
 
     fn get_matrix_arr() -> [[(Direction, Direction, Unit<na::Quaternion<f32>>); 4]; 6] {
         let mut rows = Vec::new();
@@ -839,31 +846,28 @@ impl<'a> OrientedBlock<'a> {
     }
 }
 
-struct CubeBlock<'a> {
-    pub Points: [bool; 20],
-    pub LGSubtype: &'a str,
-    pub SGSubtype: &'a str,
+struct CubeBlock {
+    pub Points: [bool; 8],
+    pub Shape: u32,
     pub Orientations: Vec<(Direction, Direction, Vec<Point3<f32>>)>,
 }
 
-impl<'a> CubeBlock<'a> {
+impl<'a> CubeBlock {
     pub fn new(
-        points: [bool; 20],
-        large_subtype: &'a str,
-        small_subtype: &'a str,
-    ) -> CubeBlock<'a> {
+        points: [bool; 8],
+        shape: u32
+    ) -> CubeBlock {
         let mut orientations = Vec::new();
         let mut orig_pts = Vec::new();
         let lookup = Direction::get_matrix_arr();
         for i in 0..points.len() {
             let pt = points[i];
             if pt {
-                let vec = POINTS[i];
+                let vec = POINTS_8[i];
                 orig_pts.push(Point3::from(vec));
             }
         }
 
-        println!("{}", large_subtype);
         for directions in lookup.iter() {
             for (fwd, up, quat) in directions {
                 let mut pts = Vec::new();
@@ -885,8 +889,7 @@ impl<'a> CubeBlock<'a> {
 
         return CubeBlock {
             Points: points,
-            LGSubtype: large_subtype,
-            SGSubtype: small_subtype,
+            Shape: shape,
             Orientations: orientations,
         };
     }

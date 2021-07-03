@@ -14,6 +14,7 @@ dependencies = [
  "serde",
  "serde-xml-rs",
  "serde_derive",
+ "serde_json",
  "stl_io",
  "strum 0.20.0",
  "strum_macros 0.20.1",
